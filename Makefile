@@ -3,9 +3,11 @@ CC          := clang++
 
 #The Target Binary Program
 TARGET      := violet
+TESTTARGET  := test_suite
 
 #The Directories, Source, Includes, Objects, Binary and Resources
 SRCDIR      := src
+TESTDIR     := test
 INCDIR      := inc
 BUILDDIR    := obj
 TARGETDIR   := bin
@@ -20,7 +22,7 @@ current_dir = $(shell pwd)
 CXXSTD      := -std=c++11 -Wno-deprecated-register
 CFLAGS      := $(CXXSTD) -fopenmp -Wall -O3 -g
 #LIB         := -fopenmp -lm -larmadillo
-INC         := -I$(INCDIR) -I/usr/local/include -Isrc -I../
+INC         := -I$(INCDIR) -Isrc -Isrc/test -I../
 INCDEP      := -I$(INCDIR)
 PARSER_LEXER =  parser lexer
 
@@ -29,9 +31,11 @@ PARSER_LEXER =  parser lexer
 #---------------------------------------------------------------------------------
 SOURCES     := $(shell find $(SRCDIR) -type f -name *.$(SRCEXT))
 OBJECTS     := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
+MAINOBJS    := $(shell echo $(OBJECTS) | sed 's/[^ ]*test[^ ]* *//g')
+TESTOBJS    := $(filter-out $(MAINOBJS), $(OBJECTS))
 
 #Defauilt Make
-all: directories lexer parser $(TARGET)
+all: directories lexer parser $(TARGET) $(TESTTARGET)
 
 #Remake
 remake: cleaner all
@@ -59,21 +63,24 @@ cleaner: clean
 
 parser: $(SRCDIR)/grammar/parser.yy
 	bison -d -v $(SRCDIR)/grammar/parser.yy -o $(SRCDIR)/frontend/parser.tab.cpp
-	$(CC) $(CFLAGS) $(INC) -c -o $(BUILDDIR)/parser.o $(SRCDIR)/frontend/parser.tab.cpp
+	#$(CC) $(CFLAGS) $(INC) -c -o $(BUILDDIR)/parser.o $(SRCDIR)/frontend/parser.tab.cpp
 
 lexer: $(SRCDIR)/grammar/lexer.l
 	flex --outfile=$(SRCDIR)/frontend/lexer.yy.cpp  $<
-	$(CC)  $(CFLAGS) $(INC) -c src/frontend/lexer.yy.cpp -o $(BUILDDIR)/lexer.o
+	#$(CC)  $(CFLAGS) $(INC) -c src/frontend/lexer.yy.cpp -o $(BUILDDIR)/lexer.o
 
 #Link
-$(TARGET): $(OBJECTS)
+$(TARGET): $(filter-out $(TESTOBJS),$(OBJECTS))
 	$(CC) -o $(TARGETDIR)/$(TARGET) $^
 
-#Compile
+$(TESTTARGET): $(filter-out $(BUILDDIR)/$(TARGET).$(OBJEXT),$(OBJECTS))
+	$(CC) -o $(TARGETDIR)/$(TESTTARGET) $^
+
+#Compile src
 $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INC) -c -o $@ $<
-	$(CC) $(CFLAGS) $(INC) $(INCDEP) -MM $(SRCDIR)/$*.$(SRCEXT) > $(BUILDDIR)/$*.$(DEPEXT)
+	$(CC) $(CFLAGS) $(INC) $(INCDEP) -MM $(SRCDIR)/$*.$(SRCEXT) > $(BUILDDIR)/$*.$(DEPEXT) 
 	cp -f $(BUILDDIR)/$*.$(DEPEXT) $(BUILDDIR)/$*.$(DEPEXT).tmp
 	sed -e 's|.*:|$(BUILDDIR)/$*.$(OBJEXT):|' < $(BUILDDIR)/$*.$(DEPEXT).tmp > $(BUILDDIR)/$*.$(DEPEXT)
 	sed -e 's/.*://' -e 's/\\$$//' < $(BUILDDIR)/$*.$(DEPEXT).tmp | fmt -1 | sed -e 's/^ *//' -e 's/$$/:/' >> $(BUILDDIR)/$*.$(DEPEXT)
